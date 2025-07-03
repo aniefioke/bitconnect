@@ -210,3 +210,104 @@
     )
   )
 )
+
+;; Comprehensive user activity tracking
+(define-private (update-user-activity (user principal))
+  (let (
+      (current-time stacks-block-height)
+      (activity (default-to {
+        last-seen: current-time,
+        login-count: u0,
+        total-actions: u0,
+        last-action: current-time,
+      }
+        (map-get? UserActivity user)
+      ))
+    )
+    (map-set UserActivity user
+      (merge activity {
+        last-seen: current-time,
+        total-actions: (+ (get total-actions activity) u1),
+        last-action: current-time,
+      })
+    )
+  )
+)
+
+;; Mathematical utility: maximum of two uints
+(define-private (max-uint
+    (a uint)
+    (b uint)
+  )
+  (if (>= a b)
+    a
+    b
+  )
+)
+
+;; Mathematical utility: minimum of two uints
+(define-private (min-uint
+    (a uint)
+    (b uint)
+  )
+  (if (<= a b)
+    a
+    b
+  )
+)
+
+;; Verify active friendship between two users
+(define-private (are-friends
+    (user1 principal)
+    (user2 principal)
+  )
+  (match (map-get? Friendships {
+    user1: user1,
+    user2: user2,
+  })
+    friendship (is-eq (get status friendship) FRIENDSHIP_ACTIVE)
+    false
+  )
+)
+
+;; Validate user account is active and accessible
+(define-private (check-active-user (user principal))
+  (match (map-get? Users user)
+    user-data (and
+      (is-eq (get status user-data) STATUS_ACTIVE)
+      (is-none (get deactivation-time user-data))
+    )
+    false
+  )
+)
+
+;; Verify user exists in the BitConnect Pro network
+(define-private (user-exists (user principal))
+  (is-some (map-get? Users user))
+)
+
+;; Check if one user has blocked another
+(define-private (is-blocked
+    (blocker principal)
+    (blocked principal)
+  )
+  (is-some (map-get? BlockedUsers {
+    blocker: blocker,
+    blocked: blocked,
+  }))
+)
+
+;; Retrieve user privacy settings with secure defaults
+(define-private (get-privacy-settings (user principal))
+  (default-to {
+    friend-list-visible: true,
+    status-visible: true,
+    metadata-visible: true,
+    last-seen-visible: true,
+    profile-image-visible: true,
+    encryption-enabled: false,
+    last-updated: stacks-block-height,
+  }
+    (map-get? UserPrivacy user)
+  )
+)
