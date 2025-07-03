@@ -311,3 +311,96 @@
     (map-get? UserPrivacy user)
   )
 )
+
+;; BATCH PROCESSING OPTIMIZATION SYSTEM
+
+;; Dynamic batch size optimization based on usage patterns
+(define-public (optimize-batch-size (user principal))
+  (let (
+      (batch-data (unwrap-panic (map-get? UserBatches user)))
+      (current-time stacks-block-height)
+      (time-since-last-batch (- current-time (get last-batch-timestamp batch-data)))
+      (current-batch-size (get batch-size batch-data))
+      (items-in-current-batch (get current-batch-items batch-data))
+    )
+    (if (> time-since-last-batch BATCH_EXPIRY_PERIOD)
+      ;; Batch expired, reset and adjust size
+      (begin
+        (map-set UserBatches user
+          (merge batch-data {
+            batch-size: (max-uint MIN_BATCH_SIZE (/ current-batch-size u2)),
+            current-batch-items: u0,
+            last-batch-timestamp: current-time,
+          })
+        )
+        (ok true)
+      )
+      ;; Adjust based on usage
+      (begin
+        (map-set UserBatches user
+          (merge batch-data { batch-size: (min-uint MAX_BATCH_SIZE
+            (if (>= items-in-current-batch (/ current-batch-size u2))
+              (* current-batch-size u2)
+              current-batch-size
+            )) }
+          ))
+        (ok true)
+      )
+    )
+  )
+)
+
+;; Manual batch size configuration for power users
+(define-public (set-batch-size (new-size uint))
+  (let (
+      (caller tx-sender)
+      (batch-data (unwrap-panic (map-get? UserBatches caller)))
+    )
+    (asserts! (check-active-user caller) ERR_DEACTIVATED)
+    (asserts! (and (>= new-size MIN_BATCH_SIZE) (<= new-size MAX_BATCH_SIZE))
+      ERR_INVALID_INPUT
+    )
+    (map-set UserBatches caller (merge batch-data { batch-size: new-size }))
+    (print {
+      event: "batch-size-updated",
+      user: caller,
+      new-size: new-size,
+      timestamp: stacks-block-height,
+    })
+    (ok true)
+  )
+)
+
+;; ADVANCED PRIVACY CONTROL SYSTEM
+
+;; Comprehensive privacy settings management
+(define-public (update-advanced-privacy-settings
+    (friend-list-visible bool)
+    (status-visible bool)
+    (metadata-visible bool)
+    (last-seen-visible bool)
+    (profile-image-visible bool)
+    (encryption-enabled bool)
+  )
+  (let ((caller tx-sender))
+    (asserts! (check-active-user caller) ERR_DEACTIVATED)
+    (asserts! (check-rate-limit caller u2) ERR_RATE_LIMITED)
+    (map-set UserPrivacy caller {
+      friend-list-visible: friend-list-visible,
+      status-visible: status-visible,
+      metadata-visible: metadata-visible,
+      last-seen-visible: last-seen-visible,
+      profile-image-visible: profile-image-visible,
+      encryption-enabled: encryption-enabled,
+      last-updated: stacks-block-height,
+    })
+    (update-rate-limit caller u2)
+    (update-user-activity caller)
+    (print {
+      event: "privacy-updated",
+      user: caller,
+      timestamp: stacks-block-height,
+    })
+    (ok true)
+  )
+)
