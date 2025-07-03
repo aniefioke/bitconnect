@@ -404,3 +404,76 @@
     (ok true)
   )
 )
+
+;; USER PROFILE MANAGEMENT SYSTEM
+
+;; Flexible user profile update with optional fields
+(define-public (update-user-profile
+    (name (optional (string-ascii 64)))
+    (metadata (optional (string-utf8 256)))
+    (encryption-key (optional (buff 32)))
+    (profile-image (optional (string-utf8 256)))
+  )
+  (let (
+      (caller tx-sender)
+      (user (unwrap-panic (map-get? Users caller)))
+    )
+    (asserts! (check-active-user caller) ERR_DEACTIVATED)
+    (asserts! (check-rate-limit caller u2) ERR_RATE_LIMITED)
+    (map-set Users caller
+      (merge user {
+        name: (default-to (get name user) name),
+        metadata: (if (is-some metadata)
+          metadata
+          (get metadata user)
+        ),
+        encryption-key: (if (is-some encryption-key)
+          encryption-key
+          (get encryption-key user)
+        ),
+        profile-image: (if (is-some profile-image)
+          profile-image
+          (get profile-image user)
+        ),
+      })
+    )
+    (update-rate-limit caller u2)
+    (update-user-activity caller)
+    (print {
+      event: "profile-updated",
+      user: caller,
+      timestamp: stacks-block-height,
+    })
+    (ok true)
+  )
+)
+
+;; USER ACTIVITY & ANALYTICS SYSTEM
+
+;; Secure user login tracking with privacy preservation
+(define-public (record-login)
+  (let (
+      (caller tx-sender)
+      (activity (default-to {
+        last-seen: stacks-block-height,
+        login-count: u0,
+        total-actions: u0,
+        last-action: stacks-block-height,
+      }
+        (map-get? UserActivity caller)
+      ))
+    )
+    (map-set UserActivity caller
+      (merge activity {
+        last-seen: stacks-block-height,
+        login-count: (+ (get login-count activity) u1),
+      })
+    )
+    (print {
+      event: "user-login",
+      user: caller,
+      timestamp: stacks-block-height,
+    })
+    (ok true)
+  )
+)
