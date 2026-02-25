@@ -477,3 +477,10 @@
     (ok true)
   )
 )
+
+(define-private (assert-not-blocked (caller principal) (target principal))
+  (asserts!
+    (not (or (is-blocked caller target) (is-blocked target caller)))
+    ERR_BLOCKED
+  )
+)
